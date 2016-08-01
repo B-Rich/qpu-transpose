@@ -13,8 +13,14 @@
 #include <sys/time.h>
 #include <vc4vec.h>
 
-#define NROWS (16 * 80)
-#define NCOLS (16 * 80)
+/*
+ * Maximum NROWS and NCOLS: 16 * (2 ** 7 - 1) = 16 * 127 = 2032
+ * Memory size to allocate on GPU side: NROWS * NCOLS * (32 / 8) [B]
+ * So the maximum memory size is 2032 * 2032 * 4 = 16.5 [MB]
+ */
+
+#define NROWS (16 * 127)
+#define NCOLS (16 * 127)
 
 //#define DEBUG
 
@@ -29,12 +35,21 @@ const int unif_len = 1024;
 int main()
 {
 	int i, j;
-	struct vc4vec_mem mem_out, mem_out_addr, mem_in, mem_unif, mem_code, mem_out_cpu;
+	struct vc4vec_mem mem_out, mem_out_addr, mem_in, mem_unif, mem_code;
 	struct timeval start, end;
 	unsigned *p;
 	unsigned *p_in, *p_out;
-	unsigned *p_cpu, *p_qpu;
 	float time, elems_per_sec;
+
+	if (
+		   (NROWS % 16 != 0)
+		|| (NCOLS % 16 != 0)
+		|| ((NROWS * 4) & ~((1 << (12 + 1)) - 1))
+		|| ((NCOLS * 4) & ~((1 << (12 + 1)) - 1))
+	) {
+		fprintf(stderr, "error: Invalid values for NROWS and NCOLS\n");
+		return 1;
+	}
 
 	printf("P = %d, Q = %d\n", NROWS, NCOLS);
 
@@ -45,7 +60,6 @@ int main()
 	vc4vec_mem_alloc(&mem_in, NROWS * NCOLS * (32 / 8));
 	vc4vec_mem_alloc(&mem_unif, unif_len * (32 / 8));
 	vc4vec_mem_alloc(&mem_code, code_size);
-	vc4vec_mem_alloc(&mem_out_cpu, NCOLS * NROWS * (32 / 8));
 
 	p = mem_out_addr.cpu_addr;
 	*p++ = mem_out.gpu_addr;
@@ -100,7 +114,7 @@ int main()
 
 	gettimeofday(&start, NULL);
 	p_in = mem_in.cpu_addr;
-	p_out = mem_out_cpu.cpu_addr;
+	p_out = mem_out.cpu_addr;
 	for (i = 0; i < NROWS; i ++)
 		for (j = 0; j < NCOLS; j ++)
 			p_out[j * NROWS + i] = p_in[i * NCOLS + j];
@@ -109,6 +123,11 @@ int main()
 	time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) * 1e-6;
 	elems_per_sec = (NROWS * NCOLS) / time;
 	printf("CPU: %f [s]  %g [element/s]\n", time, elems_per_sec);
+
+	p = mem_out.cpu_addr;
+	for (i = 0; i < NROWS; i ++)
+		for (j = 0; j < NCOLS; j ++)
+			p[i * NCOLS + j] = 0;
 
 	gettimeofday(&start, NULL);
 	launch_qpu_job_mailbox(1, 1, 3e3, mem_unif.gpu_addr, mem_code.gpu_addr);
@@ -135,11 +154,11 @@ int main()
 
 	{
 		int maximum_error = 0;
-		p_cpu = mem_out_cpu.cpu_addr;
-		p_qpu = mem_out.cpu_addr;
+		p = mem_out.cpu_addr;
+		p_in = mem_in.cpu_addr;
 		for (i = 0; i < NROWS; i ++) {
 			for (j = 0; j < NCOLS; j ++) {
-				int error = abs(p_cpu[i * NCOLS + j] - p_qpu[i * NCOLS + j]);
+				int error = abs(p_in[j * NROWS + i] - p[i * NCOLS + j]);
 				if (error > maximum_error)
 					maximum_error = error;
 			}
@@ -147,7 +166,6 @@ int main()
 		printf("Maximum error: %d\n", maximum_error);
 	}
 
-	vc4vec_mem_free(&mem_out_cpu);
 	vc4vec_mem_free(&mem_code);
 	vc4vec_mem_free(&mem_unif);
 	vc4vec_mem_free(&mem_in);
