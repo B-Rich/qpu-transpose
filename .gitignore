@@ -1,5 +1,7 @@
 .*.swp
 
+cpu_only.o
+cpu_only
 transpose.qasm2
 transpose.qbin
 transpose.qhex
