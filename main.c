@@ -34,6 +34,7 @@ int main()
 	unsigned *p;
 	unsigned *p_in, *p_out;
 	unsigned *p_cpu, *p_qpu;
+	float time, elems_per_sec;
 
 	printf("P = %d, Q = %d\n", NROWS, NCOLS);
 
@@ -105,7 +106,9 @@ int main()
 			p_out[j * NROWS + i] = p_in[i * NCOLS + j];
 	gettimeofday(&end, NULL);
 
-	printf("CPU: %f [s]\n", (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) * 1e-6);
+	time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) * 1e-6;
+	elems_per_sec = (NROWS * NCOLS) / time;
+	printf("CPU: %f [s]  %g [element/s]\n", time, elems_per_sec);
 
 	gettimeofday(&start, NULL);
 	launch_qpu_job_mailbox(1, 1, 3e3, mem_unif.gpu_addr, mem_code.gpu_addr);
@@ -126,7 +129,9 @@ int main()
 	}
 #endif /* DEBUG */
 
-	printf("QPU: %f [s]\n", (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) * 1e-6);
+	time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) * 1e-6;
+	elems_per_sec = (NROWS * NCOLS) / time;
+	printf("QPU: %f [s]  %g [element/s]\n", time, elems_per_sec);
 
 	{
 		int maximum_error = 0;
