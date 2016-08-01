@@ -1,0 +1,7 @@
+.*.swp
+
+transpose.qasm2
+transpose.qbin
+transpose.qhex
+main.o
+main
