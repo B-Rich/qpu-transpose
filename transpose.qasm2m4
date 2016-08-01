@@ -10,7 +10,7 @@
 define(`Pd16_RA', `ra0')
 define(`Qd16_RA', `ra1')
 define(`IN_ADDR_RA', `ra2')
-define(`OUT_ADDR_RA', `ra3')
+define(`OUT_ADDR_RB', `rb0')
 
 define(`C_64_RA', `ra4')
 define(`C_1_RA', `ra5')
@@ -21,8 +21,8 @@ define(`Qm64_RA', `ra9')
 define(`Pm4_RA', `ra14')
 define(`Qm4_RA', `ra15')
 
-define(`I_RB', `rb0')
-define(`J_RB', `rb1')
+define(`I_RB', `rb1')
+define(`J_RB', `rb2')
 
 define(`TMP0_R', `r0')
 define(`TMP1_R', `r1')
@@ -86,7 +86,7 @@ li cond_add=al waddr_add=TMP1_R imm=`64`
 alu cond_add=al op_add=sub waddr_add=TMP1_R raddr_a=Pm4_RA add_a=ra add_b=TMP1_R
 alu cond_add=al op_add=or ws=1 waddr_add=vpmvcd_wr_setup add_a=TMP0_R add_b=TMP1_R
 
-alu cond_add=al op_add=or waddr_add=OUT_ADDR_RA raddr_a=uniform_read add_a=ra add_b=ra
+alu cond_add=al op_add=or waddr_add=OUT_ADDR_RB ws=1 raddr_a=uniform_read add_a=ra add_b=ra
 
 :loop-i
 
@@ -97,37 +97,27 @@ alu cond_add=al op_add=or waddr_add=OUT_ADDR_RA raddr_a=uniform_read add_a=ra ad
 
 	:loop-j
 		; ** TMP0 = IN_ADDR + 16 * I * (32 / 8) + 16 * Q * J * (32 / 8) **
-		; TMP0_R = 64 * I = 16 * I * (32 / 8)
-		alu cond_mul=al op_mul=mul24 waddr_mul=TMP0_R raddr_a=C_64_RA raddr_b=I_RB mul_a=ra mul_b=rb
 		; TMP1_R = (64 * Q) * J = 16 * Q * J * (32 / 8)
 		alu cond_mul=al op_mul=mul24 waddr_mul=TMP1_R raddr_a=Qm64_RA raddr_b=J_RB mul_a=ra mul_b=rb
-		; TMP0_R += IN_ADDR
-		alu cond_add=al op_add=add waddr_add=TMP0_R raddr_a=IN_ADDR_RA add_a=ra add_b=TMP0_R
-		; TMP0_R += TMP1_R
-		alu cond_add=al op_add=add waddr_add=TMP0_R add_a=TMP0_R add_b=TMP1_R
-
-		alu cond_add=al op_add=or waddr_add=vpm_ld_addr add_a=TMP0_R add_b=TMP0_R
-		alu cond_add=al op_add=or raddr_a=vpm_ld_wait add_a=ra add_b=ra
+		; TMP1_R += IN_ADDR
+		alu cond_add=al op_add=add waddr_add=TMP1_R raddr_a=IN_ADDR_RA add_a=ra add_b=TMP1_R
+		; vpm_ld_addr = TMP1_R + IN_ADDR_ADD1_R
+		alu cond_add=al op_add=add waddr_add=vpm_ld_addr add_a=TMP1_R add_b=IN_ADDR_ADD1_R
 
 		; ** TMP0 = OUT_ADDR + 16 * J * (32 / 8) + 16 * P * I * (32 / 8) **
-		; TMP0 = 64 * J = 16 * I * (32 / 8)
-		alu cond_mul=al op_mul=mul24 waddr_mul=TMP0_R raddr_a=C_64_RA raddr_b=J_RB mul_a=ra mul_b=rb
-		; TMP1 = (64 * P) * I = 16 * P * I * (32 / 8)
-		alu cond_mul=al op_mul=mul24 waddr_mul=TMP1_R raddr_a=Pm64_RA raddr_b=I_RB mul_a=ra mul_b=rb
-		; TMP0 = OUT_ADDR + TMP0
-		alu cond_add=al op_add=add waddr_add=TMP0_R raddr_a=OUT_ADDR_RA add_a=ra add_b=TMP0_R
-		; TMP0 = TMP0 + TMP1
-		alu cond_add=al op_add=add waddr_add=TMP0_R add_a=TMP0_R add_b=TMP1_R
-
-		alu cond_add=al op_add=or waddr_add=vpm_st_addr ws=1 add_a=TMP0_R add_b=TMP0_R
-		alu cond_add=al op_add=or raddr_b=vpm_st_wait add_a=rb add_b=rb
+		; TMP1 = 64 * J = 16 * I * (32 / 8)
+		alu cond_mul=al op_mul=mul24 waddr_mul=TMP1_R raddr_a=C_64_RA raddr_b=J_RB mul_a=ra mul_b=rb
+		; TMP1 += OUT_ADDR and read vpm_ld_wait
+		alu cond_add=al cond_mul=al op_add=add op_mul=v8min waddr_add=TMP1_R raddr_a=vpm_ld_wait raddr_b=OUT_ADDR_RB add_a=rb add_b=TMP1_R mul_a=ra mul_b=ra
+		; vpm_st_addr = TMP1_R + OUT_ADDR_ADD2_R
+		alu cond_add=al op_add=add waddr_add=vpm_st_addr ws=1 add_a=TMP1_R add_b=OUT_ADDR_ADD2_R
 
 		alu cond_add=al op_add=add waddr_add=TMP0_R raddr_a=C_1_RA raddr_b=J_RB add_a=ra add_b=rb
 		alu cond_add=al sf=1 op_add=sub raddr_a=Pd16_RA add_a=ra add_b=TMP0_R
 		bra cond_br=allzc rel=1 imm=`:loop-j`
 		alu cond_add=al op_add=or waddr_add=J_RB ws=1 add_a=TMP0_R add_b=TMP0_R
 		alu cond_add=al op_add=add waddr_add=TMP0_R raddr_a=C_1_RA raddr_b=I_RB add_a=ra add_b=rb
-		alu cond_add=al sf=1 op_add=sub raddr_a=Qd16_RA add_a=ra add_b=TMP0_R
+		alu cond_add=al cond_mul=al sf=1 op_add=sub op_mul=v8min raddr_a=Qd16_RA raddr_b=vpm_st_wait add_a=ra add_b=TMP0_R mul_a=rb mul_b=rb
 	bra cond_br=allzc rel=1 imm=`:loop-i`
 	alu sig=simm cond_add=zs op_add=or waddr_add=host_int simm=1 add_a=rb add_b=rb
 	alu cond_add=al op_add=or waddr_add=I_RB ws=1 add_a=TMP0_R add_b=TMP0_R
