@@ -29,7 +29,7 @@ const int unif_len = 1024;
 int main()
 {
 	int i, j;
-	struct vc4vec_mem mem_out, mem_in, mem_unif, mem_code, mem_out_cpu;
+	struct vc4vec_mem mem_out, mem_out_addr, mem_in, mem_unif, mem_code, mem_out_cpu;
 	struct timeval start, end;
 	unsigned *p;
 	unsigned *p_in, *p_out;
@@ -40,16 +40,20 @@ int main()
 	vc4vec_init();
 
 	vc4vec_mem_alloc(&mem_out, NCOLS * NROWS * (32 / 8));
+	vc4vec_mem_alloc(&mem_out_addr, 1 * (32 / 8));
 	vc4vec_mem_alloc(&mem_in, NROWS * NCOLS * (32 / 8));
 	vc4vec_mem_alloc(&mem_unif, unif_len * (32 / 8));
 	vc4vec_mem_alloc(&mem_code, code_size);
 	vc4vec_mem_alloc(&mem_out_cpu, NCOLS * NROWS * (32 / 8));
 
+	p = mem_out_addr.cpu_addr;
+	*p++ = mem_out.gpu_addr;
+
 	p = mem_unif.cpu_addr;
 	*p++ = NROWS / 16;
 	*p++ = NCOLS / 16;
 	*p++ = mem_in.gpu_addr;
-	*p++ = mem_out.gpu_addr;
+	*p++ = mem_out_addr.gpu_addr;
 
 	memcpy(mem_code.cpu_addr, code, code_size);
 
@@ -142,6 +146,7 @@ int main()
 	vc4vec_mem_free(&mem_code);
 	vc4vec_mem_free(&mem_unif);
 	vc4vec_mem_free(&mem_in);
+	vc4vec_mem_free(&mem_out_addr);
 	vc4vec_mem_free(&mem_out);
 
 	vc4vec_finalize();
