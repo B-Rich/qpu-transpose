@@ -59,16 +59,23 @@ int main()
 		srandom(st.tv_sec * 1e6 + st.tv_usec);
 	}
 
+#ifndef DEBUG
 	p = mem_in.cpu_addr;
 	for (i = 0; i < NROWS; i ++)
 		for (j = 0; j < NCOLS; j ++)
 			p[i * NCOLS + j] = random();
+#else /* DEBUG */
+	p = mem_in.cpu_addr;
+	for (i = 0; i < NROWS; i ++)
+		for (j = 0; j < NCOLS; j ++)
+			p[i * NCOLS + j] = (i + j * 16) % 1000;
+#endif /* DEBUG */
 
 #ifdef DEBUG
 	p = mem_out.cpu_addr;
 	for (i = 0; i < NROWS; i ++)
 		for (j = 0; j < NCOLS; j ++)
-			p[i * NCOLS + j] = 0;
+			p[i * NCOLS + j] = 3;
 #endif /* DEBUG */
 
 #ifdef DEBUG
